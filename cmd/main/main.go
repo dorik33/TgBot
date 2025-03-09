@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 
 	_ "github.com/lib/pq"
 
@@ -15,9 +14,6 @@ import (
 
 func main() {
 	cfg := config.Load()
-	os.Setenv("DATABASE_USER", cfg.Database.User)
-	os.Setenv("DATABASE_PASSWORD", cfg.Database.Password)
-	os.Setenv("DATABASE_NAME", cfg.Database.DBName)
 
 	client := api.NewAPIClient(cfg.TimeOut)
 	data, err := client.GetInfo("bitcoin")
