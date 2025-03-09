@@ -1,25 +1,43 @@
 package api
 
 import (
-	"io"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
-func GetInfo() ([]byte, error) {
-	var data []byte
-	resp, err := http.Get("https://api.coincap.io/v2/assets")
-	if err != nil {
-		log.Println("error while get info from coincap")
-		return data, err
-	}
-	defer resp.Body.Close()
-	data, err = io.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("error while get info about crypto")
-		return data, err
-	}
-	return data, nil
+type APIClient struct {
+	client *http.Client
 }
 
+func NewAPIClient(timeout time.Duration) *APIClient {
+	return &APIClient{
+		&http.Client{
+			Timeout: timeout,
+		},
+	}
+}
 
+func (a *APIClient) GetInfo(id string) (Crypto, error) {
+	var res Crypto
+	url := "https://api.coincap.io/v2/assets/" + id
+	resp, err := a.client.Get(url)
+	if err != nil {
+		log.Println("error while get info from coincap")
+		return res, err
+	}
+	defer resp.Body.Close()
+	err = json.NewDecoder(resp.Body).Decode(&res)
+	if err != nil {
+		log.Println("error while unMarshall info")
+		return res, err
+	}
+	log.Println(res, err)
+	if res.PriceUSD == "" {
+		return res, fmt.Errorf("Token was not found")
+	}
+
+	return res, nil
+}
