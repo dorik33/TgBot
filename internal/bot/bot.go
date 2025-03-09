@@ -20,20 +20,17 @@ func StartBot(key string, apiClient *api.APIClient, rep *database.SubscriptionRe
 	u.Timeout = 60
 	updates, _ := bot.GetUpdatesChan(u)
 	for update := range updates {
-		if update.Message == nil { // Игнорируем не сообщения
+		if update.Message == nil { 
 			continue
 		}
 
-		// Выводим текст полученного сообщения
 		log.Printf("[%s] %s, %d\n", update.Message.From.UserName, update.Message.Text, update.Message.Chat.ID)
 
-		// Ответ на команду /start
 		if update.Message.Text == "/start" {
 			StartMessage(bot, update)
 			log.Println(update.Message.Chat.ID)
 		}
 
-		// Ответ на команду /help
 		if update.Message.Text == "/help" {
 			HelpMessage(bot, update)
 		}
