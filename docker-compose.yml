@@ -2,17 +2,17 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15      # Официальный образ PostgreSQL
+    image: postgres:15      
     container_name: crypto-bot-db
     environment:
-      POSTGRES_USER: bot_user       # Логин для БД
-      POSTGRES_PASSWORD: secure_password  # Пароль
-      POSTGRES_DB: crypto_bot       # Название БД
+      POSTGRES_USER: bot_user      
+      POSTGRES_PASSWORD: secure_password  
+      POSTGRES_DB: crypto_bot      
     ports:
-      - "5433:5432"                 # Порт для подключения
+      - "5433:5432"                 
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # Том для данных
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Скрипт инициализации
+      - postgres_data:/var/lib/postgresql/data  
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  
 
 volumes:
-  postgres_data:   # Том для сохранения данных между перезапусками
+  postgres_data:  
