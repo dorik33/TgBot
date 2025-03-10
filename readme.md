@@ -4,10 +4,10 @@ Telegram бот для отслеживания цен криптовалют и
 
 ## Требования
 - Docker и Docker Compose
-- Go 1.16+ (для запуска без Docker)
+- Go 1.16+
 - API-токен от [BotFather](https://t.me/BotFather)
 
-## Установка
+# Установка
 1. Клонируйте репозиторий
 2. Создайте `config.yaml` в корне проекта:
 
@@ -24,16 +24,16 @@ database:
 ## Запуск postgres в Docker
 docker-compose up -d
 
-# Остановить
+## Остановить
 docker-compose down
 
-# Пересоздать БД (сброс данных)
+## Пересоздать БД (сброс данных)
 docker-compose down -v && docker-compose up -d
 
 ## Запуск бота
 ```go run cmd/main/main.go```
 
-## Команды бота
+# Команды бота
 ```/price <токен>```	Текущая цена криптовалюты	```/price bitcoin```
 ```/sub <токен>```	Подписаться на обновления цены	```/sub ethereum```
 ```/subs```	Список активных подписок	
