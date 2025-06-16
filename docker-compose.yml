@@ -2,17 +2,40 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15      # Официальный образ PostgreSQL
-    container_name: crypto-bot-db
+    image: postgres:15-alpine
+    container_name: telegram_bot_db
     environment:
-      POSTGRES_USER: bot_user       # Логин для БД
-      POSTGRES_PASSWORD: secure_password  # Пароль
-      POSTGRES_DB: crypto_bot       # Название БД
-    ports:
-      - "5433:5432"                 # Порт для подключения
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DBNAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # Том для данных
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Скрипт инициализации
+      - bot_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_DBNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrator:
+    build: . 
+    image: telegram_bot_migrator 
+    container_name: migrator
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "./goose postgres \"postgres://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:${DATABASE_PORT}/${DATABASE_DBNAME}?sslmode=disable\" -dir /app/migrations up || [ $? -eq 3 ]"]
+    volumes:
+      - ./migrations:/app/migrations
+
+  app:
+    build: .
+    image: telegram_bot
+    container_name: 'bot'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
 
 volumes:
-  postgres_data:   # Том для сохранения данных между перезапусками
+  bot_data:

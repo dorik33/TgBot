@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 
 	_ "github.com/lib/pq"
 
@@ -15,27 +14,25 @@ import (
 
 func main() {
 	cfg := config.Load()
-	os.Setenv("DATABASE_USER", cfg.Database.User)
-	os.Setenv("DATABASE_PASSWORD", cfg.Database.Password)
-	os.Setenv("DATABASE_NAME", cfg.Database.DBName)
+	fmt.Println(cfg)
 
-	client := api.NewAPIClient(cfg.TimeOut)
-	data, err := client.GetInfo("bitcoin")
-	if err != nil {
-		log.Println(err)
-	}
-	fmt.Println(data.PriceUSD)
+	client := api.NewAPIClient(cfg.ApiKey, cfg.TimeOut)
 
 	db := database.NewConnection(*cfg)
 	subRepo := database.NewSubscriptionRepository(db)
+	walletrepo := database.NewWalletRepository(db)
 
 	subs, err := subRepo.GetSubcriptions(914333594)
 	if err != nil {
-		log.Fatalf("не работает бд  ", err)
+		log.Fatalf("не работает бд: %v  ", err)
 	}
 	log.Println(subs)
 
-	bot.StartBot(cfg.BotKey, client, subRepo)
+	b, err := bot.NewBot(cfg.BotKey, client, subRepo, walletrepo)
+	if err != nil {
+		log.Fatalf("error while start bot: %v", err)
+	}
+	b.Start()
 
 	//TODO Добавить readme, добавить кеширование, возможно добавить Make
 }

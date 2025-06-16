@@ -3,41 +3,71 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type APIClient struct {
-	client *http.Client
+	APIKey string
+	Client *http.Client
 }
 
-func NewAPIClient(timeout time.Duration) *APIClient {
+func NewAPIClient(apiKey string, timeout time.Duration) *APIClient {
 	return &APIClient{
-		&http.Client{
+		APIKey: apiKey,
+		Client: &http.Client{
 			Timeout: timeout,
 		},
 	}
 }
 
-func (a *APIClient) GetInfo(id string) (Crypto, error) {
-	var res Crypto
-	url := "https://api.coincap.io/v2/assets/" + id
-	resp, err := a.client.Get(url)
+func (c *APIClient) GetInfo(symbol string) (*CryptoInfo, error) {
+	url := fmt.Sprintf("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=%s&convert=USD", symbol)
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Println("error while get info from coincap")
-		return res, err
+		return nil, err
+	}
+	req.Header.Set("Accepts", "application/json")
+	req.Header.Set("X-CMC_PRO_API_KEY", c.APIKey)
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
-	err = json.NewDecoder(resp.Body).Decode(&res)
-	if err != nil {
-		log.Println("error while unMarshall info")
-		return res, err
-	}
-	log.Println(res, err)
-	if res.PriceUSD == "" {
-		return res, fmt.Errorf("Token was not found")
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error: %s", string(body))
 	}
 
-	return res, nil
+	var result struct {
+		Data map[string]struct {
+			ID      int    `json:"id"`
+			Name    string `json:"name"`
+			Symbol  string `json:"symbol"`
+			CmcRank int    `json:"cmc_rank"`
+			Quote   map[string]struct {
+				Price float64 `json:"price"`
+			} `json:"quote"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	data := result.Data[strings.ToUpper(symbol)]
+	info := &CryptoInfo{
+		ID:       fmt.Sprintf("%d", data.ID),
+		Name:     data.Name,
+		Symbol:   data.Symbol,
+		PriceUSD: data.Quote["USD"].Price,
+		Rank:     data.CmcRank,
+	}
+
+	return info, nil
 }

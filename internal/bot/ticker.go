@@ -4,26 +4,24 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dorik33/TgBot/internal/api"
-	"github.com/dorik33/TgBot/internal/database"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-func ticker(bot *tgbotapi.BotAPI, client *api.APIClient, repo *database.SubscriptionRepository) {
+func (b *Bot) ticker() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			subs := repo.GetAllSubs()
+			subs := b.supbrepo.GetAllSubs()
 			fmt.Println("mailing is start")
 			for _, sub := range subs {
-				crypto, _ := client.GetInfo(sub.Token)
+				crypto, _ := b.apiClient.GetInfo(sub.Token)
 
-				price := parsePrice(crypto.PriceUSD)
+				price := crypto.PriceUSD
 				msg := tgbotapi.NewMessage(sub.UserID, fmt.Sprintf("Цена на токен %s: %f", sub.Token, price))
-				bot.Send(msg)
+				b.botAPI.Send(msg)
 			}
 		}
 	}

@@ -6,11 +6,6 @@ import (
 	"github.com/dorik33/TgBot/internal/database"
 )
 
-func parsePrice(priceStr string) float64 {
-	var price float64
-	fmt.Sscanf(priceStr, "%f", &price)
-	return price
-}
 
 func parseSubs(subs []database.Subscription) string {
 	res := "Ваши подписки:\n"

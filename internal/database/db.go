@@ -11,16 +11,11 @@ import (
 )
 
 func NewConnection(cfg config.Config) *sql.DB {
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", cfg.Database.User,
-		cfg.Database.Password,
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.DBName)
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", cfg.Database.DBCon)
 	if err != nil {
 		log.Fatalf("Ошибка инициализации базы данных")
 	}
-
+	fmt.Println(cfg.Database.DBCon)
 	if err = db.Ping(); err != nil {
 		log.Fatalf("Ошибка проверки подключения")
 	}

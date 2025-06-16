@@ -1,12 +1,10 @@
 package api
 
-type Crypto struct {
-	Data `json:"data"`
-}
 
-type Data struct {
-	ID       string `json:"id"`
-	Rank     string `json:"rank"`
-	Symbol   string `json:"symbol"`
-	PriceUSD string `json:"priceUsd"`
+type CryptoInfo struct {
+	ID       string  `json:"id"`
+	Symbol   string  `json:"symbol"`
+	Name     string  `json:"name"`
+	PriceUSD float64 `json:"price_usd"`
+	Rank     int     `json:"rank"`
 }
