@@ -7,15 +7,21 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/dorik33/TgBot/internal/models"
 )
 
-type APIClient struct {
+type aPIClient struct {
 	APIKey string
 	Client *http.Client
 }
 
-func NewAPIClient(apiKey string, timeout time.Duration) *APIClient {
-	return &APIClient{
+type CoinAPI interface {
+	GetInfo(symbol string) (*models.CryptoInfo, error)
+}
+
+func NewAPIClient(apiKey string, timeout time.Duration) CoinAPI {
+	return &aPIClient{
 		APIKey: apiKey,
 		Client: &http.Client{
 			Timeout: timeout,
@@ -23,7 +29,7 @@ func NewAPIClient(apiKey string, timeout time.Duration) *APIClient {
 	}
 }
 
-func (c *APIClient) GetInfo(symbol string) (*CryptoInfo, error) {
+func (c *aPIClient) GetInfo(symbol string) (*models.CryptoInfo, error) {
 	url := fmt.Sprintf("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=%s&convert=USD", symbol)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -61,12 +67,10 @@ func (c *APIClient) GetInfo(symbol string) (*CryptoInfo, error) {
 	}
 
 	data := result.Data[strings.ToUpper(symbol)]
-	info := &CryptoInfo{
-		ID:       fmt.Sprintf("%d", data.ID),
+	info := &models.CryptoInfo{
 		Name:     data.Name,
 		Symbol:   data.Symbol,
 		PriceUSD: data.Quote["USD"].Price,
-		Rank:     data.CmcRank,
 	}
 
 	return info, nil

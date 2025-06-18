@@ -10,10 +10,11 @@ import (
 const configPath = ".env"
 
 type Config struct {
-	ApiKey string `env:"APIKEY"`
-	BotKey   string        `env:"BOTKEY"`
-	TimeOut  time.Duration `env:"TIMEOUT"`
-	Database Database
+	ApiKey      string        `env:"APIKEY"`
+	BotKey      string        `env:"BOTKEY"`
+	TimeOut     time.Duration `env:"TIMEOUT"`
+	Database    Database
+	RedisConfig RedisConfig
 }
 
 type Database struct {
@@ -22,7 +23,15 @@ type Database struct {
 	User     string `env:"DATABASE_USER"`
 	Password string `env:"DATABASE_PASSWORD"`
 	DBName   string `env:"DATABASE_DBNAME"`
-	DBCon   string `env:"DB_CON"`
+	DBCon    string `env:"DB_CON"`
+}
+
+type RedisConfig struct {
+	Password string        `env:"REDIS_PASSWORD"`
+	Host     string        `env:"REDIS_HOST"`
+	Port     string        `env:"REDIS_PORT"`
+	DB       int           `env:"REDIS_DB"`
+	TTL      time.Duration `env:"REDIS_TTL"`
 }
 
 func Load() *Config {

@@ -6,14 +6,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dorik33/TgBot/internal/database"
+	"github.com/dorik33/TgBot/internal/models"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-
 func (b *Bot) sendMessage(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
-	b.botAPI.Send(msg)
+	_, err := b.botAPI.Send(msg)
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
+	}
 }
 
 func (b *Bot) handlePrice(update tgbotapi.Update) {
@@ -23,7 +25,7 @@ func (b *Bot) handlePrice(update tgbotapi.Update) {
 		return
 	}
 
-	crypto, err := b.apiClient.GetInfo(args)
+	crypto, err := b.cryptoService.GetCryptoPrice(args)
 	if err != nil {
 		log.Printf("Ошибка при запросе цены: %v", err)
 		b.sendMessage(update.Message.Chat.ID, "Не удалось получить данные 😢")
@@ -41,24 +43,18 @@ func (b *Bot) handleSub(update tgbotapi.Update) {
 		return
 	}
 
-	crypto, err := b.apiClient.GetInfo(args)
+	err := b.subscriptionService.Subscribe(update.Message.Chat.ID, args)
 	if err != nil {
 		log.Printf("Ошибка при добавлении подписки: %v", err)
-		b.sendMessage(update.Message.Chat.ID, "Не удалось получить данные 😢")
-		return
-	}
-
-	if err = b.supbrepo.AddSubscription(update.Message.Chat.ID, args); err != nil {
-		log.Printf("Ошибка при сохранении подписки: %v", err)
 		b.sendMessage(update.Message.Chat.ID, "Не удалось добавить подписку 😢")
 		return
 	}
 
-	b.sendMessage(update.Message.Chat.ID, fmt.Sprintf("Подписка на %s успешно добавлена!", crypto.Name))
+	b.sendMessage(update.Message.Chat.ID, fmt.Sprintf("Подписка на %s успешно добавлена!", args))
 }
 
 func (b *Bot) handleListSubs(update tgbotapi.Update) {
-	subs, err := b.supbrepo.GetSubcriptions(update.Message.Chat.ID)
+	subs, err := b.subscriptionService.GetUserSubscriptions(update.Message.Chat.ID)
 	if err != nil {
 		log.Printf("Ошибка при получении подписок: %v", err)
 		b.sendMessage(update.Message.Chat.ID, "Не удалось получить подписки 😢")
@@ -76,7 +72,8 @@ func (b *Bot) handleDeleteSub(update tgbotapi.Update) {
 		return
 	}
 
-	if err := b.supbrepo.DeleteSubscription(update.Message.Chat.ID, args); err != nil {
+	err := b.subscriptionService.Unsubscribe(update.Message.Chat.ID, args)
+	if err != nil {
 		log.Printf("Ошибка при удалении подписки: %v", err)
 		b.sendMessage(update.Message.Chat.ID, "Не удалось удалить подписку 😢")
 		return
@@ -85,8 +82,59 @@ func (b *Bot) handleDeleteSub(update tgbotapi.Update) {
 	b.sendMessage(update.Message.Chat.ID, fmt.Sprintf("Подписка на %s успешно удалена!", args))
 }
 
+func (b *Bot) HandleAddCrypto(update tgbotapi.Update) {
+	args := strings.TrimSpace(update.Message.CommandArguments())
+	parts := strings.Split(args, " ")
+
+	if len(parts) < 2 {
+		b.sendMessage(update.Message.Chat.ID, "Использование: /add_crypto <токен> <количество> [цена_покупки]\nПримеры:\n/add_crypto BTC 0.5\n/add_crypto ETH 2 3500")
+		return
+	}
+
+	token := strings.ToUpper(parts[0])
+	amountStr := parts[1]
+
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil || amount <= 0 {
+		b.sendMessage(update.Message.Chat.ID, "Некорректное количество. Используйте число больше 0.\nПример: 0.5 или 2")
+		return
+	}
+
+	var buyPrice float64
+	if len(parts) >= 3 {
+		buyPrice, err = strconv.ParseFloat(parts[2], 64)
+		if err != nil || buyPrice <= 0 {
+			b.sendMessage(update.Message.Chat.ID, "Некорректная цена покупки. Используйте число больше 0.\nПример: 3500")
+			return
+		}
+	}
+
+	portfolio := &models.Portfolio{
+		UserID: update.Message.Chat.ID,
+		Token:  token,
+		Amount: amount,
+		Price:  buyPrice,
+	}
+
+	err = b.walletService.AddCryptoToWallet(portfolio)
+	if err != nil {
+		log.Printf("Ошибка добавления в портфолио: %v", err)
+		b.sendMessage(update.Message.Chat.ID, "Ошибка при сохранении 😢")
+		return
+	}
+
+	response := fmt.Sprintf(
+		"✅ Успешно добавлено:\n%s: %f по цене $%f\nОбщая стоимость покупки: $%f",
+		token,
+		amount,
+		portfolio.Price,
+		amount*portfolio.Price,
+	)
+	b.sendMessage(update.Message.Chat.ID, response)
+}
+
 func (b *Bot) HandleMyWallet(update tgbotapi.Update) {
-	wallet, err := b.walletrepo.GetWallet(update.Message.Chat.ID)
+	wallet, err := b.walletService.GetWallet(update.Message.Chat.ID)
 	if err != nil {
 		log.Printf("Ошибка получения портфолио: %v", err)
 		b.sendMessage(update.Message.Chat.ID, "Ошибка при загрузке портфолио 😢")
@@ -101,7 +149,7 @@ func (b *Bot) HandleMyWallet(update tgbotapi.Update) {
 	currentPrices := make(map[string]float64)
 	for _, item := range wallet {
 		if _, exists := currentPrices[item.Token]; !exists {
-			crypto, err := b.apiClient.GetInfo(item.Token)
+			crypto, err := b.cryptoService.GetCryptoPrice(item.Token)
 			if err != nil {
 				log.Printf("Ошибка получения цены для %s: %v", item.Token, err)
 				currentPrices[item.Token] = 0
@@ -128,7 +176,6 @@ func (b *Bot) HandleMyWallet(update tgbotapi.Update) {
 		totalBuyCost += buyCost
 		totalCurrentValue += currentValue
 
-		// Определяем иконку для прибыли/убытка
 		profitIcon := "📉"
 		if profit >= 0 {
 			profitIcon = "📈"
@@ -139,8 +186,8 @@ func (b *Bot) HandleMyWallet(update tgbotapi.Update) {
 				"🪙 *Токен:* %s\n"+
 				"📦 *Количество:* %f\n"+
 				"💰 *Цена покупки:* $%f\n"+
-				"🏷️ *Текущая цена:* $%f\n"+
-				"%s *Прибыль/убыток:* $%f (%f%%)\n\n",
+				"🏷 *Текущая цена:* $%f\n"+
+				"%s *Прибыль/убыток:* $%f (%.2f%%)\n\n",
 			item.ID,
 			item.Token,
 			item.Amount,
@@ -166,72 +213,10 @@ func (b *Bot) HandleMyWallet(update tgbotapi.Update) {
 	builder.WriteString("💹 *Итоговая статистика:*\n")
 	builder.WriteString(fmt.Sprintf("💰 *Общая стоимость покупки:* $%f\n", totalBuyCost))
 	builder.WriteString(fmt.Sprintf("🏦 *Текущая стоимость портфолио:* $%f\n", totalCurrentValue))
-	builder.WriteString(fmt.Sprintf("%s *Общая прибыль/убыток:* $%f (%f%%)\n",
+	builder.WriteString(fmt.Sprintf("%s *Общая прибыль/убыток:* $%f (%.2f%%)\n",
 		totalProfitIcon, totalProfit, totalProfitPercent))
 
 	b.sendMessage(update.Message.Chat.ID, builder.String())
-}
-
-func (b *Bot) HandleAddCrypto(update tgbotapi.Update) {
-	args := strings.TrimSpace(update.Message.CommandArguments())
-	parts := strings.Split(args, " ")
-
-	if len(parts) < 2 {
-		b.sendMessage(update.Message.Chat.ID, "Использование: /add_crypto <токен> <количество> [цена_покупки]\nПримеры:\n/add_crypto BTC 0.5\n/add_crypto ETH 2 3500")
-		return
-	}
-
-	token := strings.ToUpper(parts[0])
-	amountStr := parts[1]
-
-	// Парсим количество
-	amount, err := strconv.ParseFloat(amountStr, 64)
-	if err != nil || amount <= 0 {
-		b.sendMessage(update.Message.Chat.ID, "Некорректное количество. Используйте число больше 0.\nПример: 0.5 или 2")
-		return
-	}
-
-	// Обработка цены покупки
-	var buyPrice float64
-	if len(parts) >= 3 {
-		buyPrice, err = strconv.ParseFloat(parts[2], 64)
-		if err != nil || buyPrice <= 0 {
-			b.sendMessage(update.Message.Chat.ID, "Некорректная цена покупки. Используйте число больше 0.\nПример: 3500")
-			return
-		}
-	} else {
-		// Если цена не указана, получаем текущую
-		crypto, err := b.apiClient.GetInfo(token)
-		if err != nil {
-			log.Printf("Ошибка получения цены для %s: %v", token, err)
-			b.sendMessage(update.Message.Chat.ID, "Не удалось получить данные по токену 😢")
-			return
-		}
-		buyPrice = crypto.PriceUSD
-	}
-
-	// Сохраняем в портфолио
-	portfolio := &database.Portfolio{
-		UserID: update.Message.Chat.ID,
-		Token:  token,
-		Amount: amount,
-		Price:  buyPrice,
-	}
-
-	if err := b.walletrepo.AddCrypto(portfolio); err != nil {
-		log.Printf("Ошибка добавления в портфолио: %v", err)
-		b.sendMessage(update.Message.Chat.ID, "Ошибка при сохранении 😢")
-		return
-	}
-
-	response := fmt.Sprintf(
-		"✅ Успешно добавлено:\n%s: %f по цене $%f\nОбщая стоимость покупки: $%f",
-		token,
-		amount,
-		buyPrice,
-		amount*buyPrice,
-	)
-	b.sendMessage(update.Message.Chat.ID, response)
 }
 
 func (b *Bot) HandleDeleteCrypto(update tgbotapi.Update) {
@@ -247,7 +232,8 @@ func (b *Bot) HandleDeleteCrypto(update tgbotapi.Update) {
 		return
 	}
 
-	if err := b.walletrepo.DeleteCrypto(id, update.Message.Chat.ID); err != nil {
+	err = b.walletService.DeleteCryptoFromWallet(id, update.Message.Chat.ID)
+	if err != nil {
 		log.Printf("Ошибка удаления из портфолио: %v", err)
 		b.sendMessage(update.Message.Chat.ID, "Ошибка при удалении 😢")
 		return
