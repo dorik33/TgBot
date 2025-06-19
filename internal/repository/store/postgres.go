@@ -8,8 +8,8 @@ import (
 
 	"github.com/dorik33/TgBot/internal/config"
 	"github.com/dorik33/TgBot/internal/repository"
-	"github.com/dorik33/TgBot/internal/repository/store/walletrepo"
 	"github.com/dorik33/TgBot/internal/repository/subrepo"
+	"github.com/dorik33/TgBot/internal/repository/walletrepo"
 )
 
 type Store struct {
